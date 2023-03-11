@@ -2,11 +2,12 @@
 # from https://cryptohack.org/challenges/introduction/
 
 from Crypto.Util.Padding import pad, unpad
+from Crypto.Random import get_random_bytes
 import telnetlib
 import json
 from itertools import cycle
 
-tn = telnetlib.Telnet("aclabs.ethz.ch", 50301)
+tn = telnetlib.Telnet("aclabs.ethz.ch", 50302)
 
 def xor(a, b):
     if len(a) < len(b):
@@ -25,19 +26,28 @@ def json_send(req):
     tn.write(request + b"\n")
 
 def main():
-    json_send({"command": "howto"})
-    response = json_recv()
-    print(response)
+    cmd_encrypted = bytes(16)
+    cmd = bytes(16)
+    for i in range(256):
+        cmd_encrypted = i.to_bytes(16)
+        json_send({"command": "encrypted_command", "encrypted_command": cmd_encrypted.hex()})
+        res = json_recv()
+        if "Failed" not in res["res"]:
+            cmd = pad(bytes.fromhex(res["res"][len("No such command: "):]), 16)
+            break
 
+    print("cmd_encrypted: " + cmd_encrypted.hex())
+    print("cmd: " + cmd.hex())
 
-    intro_encrypted = bytes.fromhex("01f0ceb3dad5f9cd23293937c893e0ec")
-    magic = (1337).to_bytes(16)
-    p = pad(b"intro", 16)
+    mask = xor(cmd, cmd_encrypted)
 
-    R = xor(xor(p, magic), intro_encrypted)
+    print("mask: " + mask.hex())
 
     flag = pad(b"flag", 16)
-    flag_encrypted = xor(xor(flag, magic), R)
+    flag_encrypted = xor(flag, mask)
+
+    print("flag: " + flag.hex())
+    print("flag_encrypted: " + flag_encrypted.hex())
 
     request = {
         "command": "encrypted_command",
